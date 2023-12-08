@@ -15,36 +15,65 @@ class TableViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        let urlString : String
+//        let urlString : String
         
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(alertShowCredits))
         
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .search, target: self, action: #selector(alertFilter))
         
         
+        let urlString = self.getStringUrl()
         
-        
-        
-        
-        if navigationController?.tabBarItem.tag == 0{
-            urlString = "https://www.hackingwithswift.com/samples/petitions-1.json"
+        DispatchQueue.global(qos: .userInitiated).async {
+            
+                           
+            guard let url = self.getURL(from: urlString) else{
+                self.showError(title: "Incorrected URL", message: "This URL does not exist, please wait for a fix")
+                return
+            }
+            
+            guard let data = self.getData(from: url) else{
+                self.showError(title: "Connection failed", message: "Unable to get data from URL, please wait for a fix")
+                return
+            }
+            
+            guard let readyData = self.parseJSON(data: data) else {
+                self.showError(title: "Data is corrupted", message: "Unable to convert data from source, please wait for a fix")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self.petitions = readyData
+                self.filter(word: "")
+                self.tableView.reloadData()
+            }
         }
-        else{
-            urlString = "https://www.hackingwithswift.com/samples/petitions-2.json"
-        }
         
-        
-        parse(urlString)
-        
-        filter(word: "")
-        
-        tableView.reloadData()
-    
         
         
        
     }
+    
+    func parseJSON(data: Data) -> [Petition]?{
+        return try? JSONDecoder().decode(Petitions.self, from: data).results
+    }
 
+    func getURL(from str : String) -> URL?{
+        return URL(string: str)
+    }
+    
+    @objc func getData (from url: URL) -> Data?{
+        return try? Data(contentsOf: url)
+    }
+    
+    func getStringUrl () -> String{
+        if navigationController?.tabBarItem.tag == 0{
+            return "https://www.hackingwithswift.com/samples/petitions-1.json"
+        }
+        else{
+            return "https://www.hackingwithswift.com/samples/petitions-2.json"
+        }
+    }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return petitionsFiltered.count
@@ -76,33 +105,16 @@ class TableViewController: UITableViewController {
     }
     
     
-    func parse(_ urlString: String) {
-        
-        let decoder = JSONDecoder()
-        
-        if let url = URL(string: urlString){
-            
-            if let data = try? Data(contentsOf: url){
+   
 
-//                print("data success rdy to parse")
-
-                if let jsonPetitions = try? decoder.decode(Petitions.self, from: data) {
-                    petitions = jsonPetitions.results
-                    
-                }
-                return
-            }
+    
+    
+    func showError(title : String, message : String){
+        DispatchQueue.main.async {
+            let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            alertController.addAction(UIAlertAction(title: "Ok, I will wait", style: .default))
+            self.present(alertController, animated: true)
         }
-        showErrParse()
-        
-    }
-
-    
-    
-    func showErrParse(){
-        let alertController = UIAlertController(title: "Loading error", message: "There was a problem loading the feed; please check your connection and try again.", preferredStyle: .alert)
-        alertController.addAction(UIAlertAction(title: "Ok", style: .default))
-        present(alertController, animated: true)
     }
     
     
@@ -111,6 +123,7 @@ class TableViewController: UITableViewController {
         action.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         present(action, animated: true)
     }
+    
     
     @objc func alertFilter(){
         let alertController = UIAlertController(title: "Напишите слово, по которому будет производиться поиск", message: nil, preferredStyle: .alert)
@@ -122,9 +135,17 @@ class TableViewController: UITableViewController {
 //            self?.submit(answer)
             self?.filter(word: word)
             self?.tableView.reloadData()
+            self?.navigationItem.title = word
+        }
+        let resetAction = UIAlertAction(title: "Сбросить", style: .default) { [weak self] action in
             
+            self?.filter(word: "")
+            self?.tableView.reloadData()
+            self?.navigationItem.title = ""
             
         }
+        
+        alertController.addAction(resetAction)
         alertController.addAction(submitAction)
         present(alertController, animated: true)
     }
